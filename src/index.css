@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────
+   tampm — Surveying & Mapping Design Tokens
+   ────────────────────────────────────────────── */
+
+@theme {
+  /* Cartographic dark palette */
+  --color-abyss: #060b18;
+  --color-deep: #0a0f1a;
+  --color-surface: #111827;
+  --color-panel: #1e293b;
+  --color-line: #1e3a5f;
+
+  /* Terrain accents */
+  --color-contour: #00d4aa;
+  --color-contour-dim: #00d4aa33;
+  --color-amber: #f5a623;
+  --color-amber-dim: #f5a62333;
+  --color-elev-white: #e8edf5;
+  --color-elev-muted: #94a3b8;
+  --color-slate: #64748b;
+
+  /* Status */
+  --color-uav-red: #ef4444;
+
+  /* Typography */
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Spacing scale */
+  --spacing-section: 7rem;
+  --spacing-section-sm: 4.5rem;
+}
+
+/* ──────────────────────────────────────────────
+   Base
+   ────────────────────────────────────────────── */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-abyss);
+  color: var(--color-elev-white);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle grid texture overlay — cartographic paper feel */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image:
+    linear-gradient(var(--color-contour) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-contour) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+::selection {
+  background: var(--color-contour);
+  color: var(--color-abyss);
+}
+
+/* ──────────────────────────────────────────────
+   Skip link
+   ────────────────────────────────────────────── */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 1rem;
+  z-index: 60;
+  padding: 0.7rem 1rem;
+  background: var(--color-contour);
+  color: var(--color-abyss);
+  font-weight: 700;
+  border-radius: 4px;
+}
+.skip-link:focus {
+  left: 1rem;
+}
+
+/* ──────────────────────────────────────────────
+   Contour animation for hero canvas
+   ────────────────────────────────────────────── */
+
+@keyframes contour-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* ──────────────────────────────────────────────
+   Elevation profile chart
+   ────────────────────────────────────────────── */
+
+.elevation-profile {
+  position: relative;
+}
+
+.elevation-profile svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ──────────────────────────────────────────────
+   3D terrain canvas container
+   ────────────────────────────────────────────── */
+
+.terrain-canvas-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+}
+
+.terrain-canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ──────────────────────────────────────────────
+   Leaflet map overrides (dark cartographic)
+   ────────────────────────────────────────────── */
+
+.leaflet-container {
+  background: var(--color-deep) !important;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+}
+
+/* ──────────────────────────────────────────────
+   Scroll reveal
+   ────────────────────────────────────────────── */
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ──────────────────────────────────────────────
+   Reduced motion
+   ────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  [data-reveal] { opacity: 1; transform: none; transition: none; }
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

@@ -15,6 +15,7 @@
   "homepage": "https://github.com/tampm0147/tampm0147.github.io#readme",
   "dependencies": {
     "leaflet": "^1.9.4",
+    "leaflet.gridlayer.googlemutant": "^0.16.0",
     "lucide-react": "^1.48.0",
     "proj4": "^2.22.0",
     "react": "^19.3.0",

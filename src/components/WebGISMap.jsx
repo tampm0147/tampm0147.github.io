@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Ruler, Square, Trash2, Download, Upload, MapPin, Eye, Layers, Crosshair } from 'lucide-react';
+import { Ruler, Square, Trash2, Download, Upload, MapPin, Eye, Layers, Crosshair, AlertTriangle } from 'lucide-react';
 import { VN2000_PROVINCES, wgs84ToVn2000 } from '../data/vn2000.js';
+import { loadGoogleMapsAPI } from '../utils/googleMapsLoader.js';
+import GoogleMutant from 'leaflet.gridlayer.googlemutant/src/Leaflet.GoogleMutant.mjs';
 
 // Pre-configured HCMUNRE & Geodetic points
 const INITIAL_POINTS = [
@@ -9,6 +11,16 @@ const INITIAL_POINTS = [
   { id: 'CORS_HCM_01', name: 'Trạm định vị vệ tinh CORS HCM01', lat: 10.776889, lon: 106.700806, h: 12.80, type: 'CORS' },
   { id: 'DC_Q1_104', name: 'Mốc địa chính Q.1 #104', lat: 10.782500, lon: 106.698000, h: 5.10, type: 'Cadastral' },
 ];
+
+const GOOGLE_BASEMAPS = {
+  'google-roadmap': { label: 'Google Đường phố', type: 'roadmap' },
+  'google-satellite': { label: 'Google Vệ tinh', type: 'satellite' },
+  'google-hybrid': { label: 'Google Hybrid', type: 'hybrid' },
+  'google-terrain': { label: 'Google Địa hình', type: 'terrain' },
+};
+
+const isGoogleBasemap = (name) => Boolean(GOOGLE_BASEMAPS[name]);
+const googleMapsConfigured = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
 
 export default function WebGISMap({ selectedCoordinate }) {
   const mapContainerRef = useRef(null);
@@ -26,6 +38,8 @@ export default function WebGISMap({ selectedCoordinate }) {
   const [measurePoints, setMeasurePoints] = useState([]);
   const [measurementResult, setMeasurementResult] = useState(null);
   const [clickedCoord, setClickedCoord] = useState(null);
+  const [googleStatus, setGoogleStatus] = useState(googleMapsConfigured ? 'idle' : 'missing_key'); // 'idle' | 'loading' | 'ready' | 'error' | 'missing_key'
+  const [googleError, setGoogleError] = useState(null);
 
   // Basemaps dictionary
   const basemapTiles = {
@@ -89,14 +103,52 @@ export default function WebGISMap({ selectedCoordinate }) {
 
   // Update Tile Layer when basemap changes
   useEffect(() => {
-    if (!mapInstanceRef.current || !layersRef.current.tileLayer) return;
-    mapInstanceRef.current.removeLayer(layersRef.current.tileLayer);
-    const newTile = L.tileLayer(basemapTiles[basemap], {
-      attribution: '&copy; CartoDB, Esri, OSM, tampm0147',
-      maxZoom: 19,
-    }).addTo(mapInstanceRef.current);
-    layersRef.current.tileLayer = newTile;
-  }, [basemap]);
+    if (!mapInstanceRef.current) return;
+
+    // Remove existing tile layer
+    if (layersRef.current.tileLayer) {
+      mapInstanceRef.current.removeLayer(layersRef.current.tileLayer);
+      layersRef.current.tileLayer = null;
+    }
+
+    if (isGoogleBasemap(basemap)) {
+      // Google Maps basemap via GoogleMutant
+      if (googleStatus === 'ready') {
+        const googleConfig = GOOGLE_BASEMAPS[basemap];
+        const googleLayer = new GoogleMutant({
+          type: googleConfig.type,
+          maxZoom: 21,
+        });
+        googleLayer.addTo(mapInstanceRef.current);
+        layersRef.current.tileLayer = googleLayer;
+      } else if (googleStatus === 'idle') {
+        // Start loading Google Maps API
+        setGoogleStatus('loading');
+        loadGoogleMapsAPI()
+          .then((result) => {
+            if (result) {
+              setGoogleStatus('ready');
+            } else {
+              setGoogleStatus('error');
+              setGoogleError('Google Maps API không tải được (thiếu API key?)');
+              setBasemap('dark'); // fallback
+            }
+          })
+          .catch((err) => {
+            setGoogleStatus('error');
+            setGoogleError(err.message);
+            setBasemap('dark'); // fallback
+          });
+      }
+    } else {
+      // Standard tile basemap
+      const newTile = L.tileLayer(basemapTiles[basemap], {
+        attribution: '&copy; CartoDB, Esri, OSM, tampm0147',
+        maxZoom: 19,
+      }).addTo(mapInstanceRef.current);
+      layersRef.current.tileLayer = newTile;
+    }
+  }, [basemap, googleStatus]);
 
   // Keep measureMode accessible inside map click listener
   const measureModeRef = useRef(measureMode);
@@ -258,18 +310,56 @@ export default function WebGISMap({ selectedCoordinate }) {
         <div className="flex items-center space-x-2">
           <Layers className="w-4 h-4 text-[#00d4aa]" />
           <span className="text-[#94a3b8]">Lớp nền:</span>
-          <div className="inline-flex rounded-lg bg-[#111827] p-1 border border-[#1e3a5f]">
-            {['dark', 'satellite', 'osm'].map((type) => (
+          <div className="inline-flex rounded-lg bg-[#111827] p-1 border border-[#1e3a5f] max-w-full overflow-x-auto">
+            {/* Standard Basemaps */}
+            {[
+              { id: 'dark', label: 'Bản đồ Tối' },
+              { id: 'satellite', label: 'Vệ tinh Esri' },
+              { id: 'osm', label: 'OSM' },
+            ].map(({ id, label }) => (
               <button
-                key={type}
-                onClick={() => setBasemap(type)}
-                className={`px-2.5 py-1 rounded capitalize transition-all ${
-                  basemap === type ? 'bg-[#00d4aa] text-[#060b18] font-bold' : 'text-[#94a3b8] hover:text-white'
+                key={id}
+                onClick={() => setBasemap(id)}
+                className={`px-2.5 py-1 rounded whitespace-nowrap transition-all ${
+                  basemap === id ? 'bg-[#00d4aa] text-[#060b18] font-bold' : 'text-[#94a3b8] hover:text-white'
                 }`}
               >
-                {type === 'dark' ? 'Bản đồ Tối' : type === 'satellite' ? 'Vệ tinh Esri' : 'OSM'}
+                {label}
               </button>
             ))}
+
+            {/* Separator */}
+            <div className="w-px bg-[#1e3a5f] mx-1 my-0.5" />
+
+            {/* Google Basemaps */}
+            {Object.entries(GOOGLE_BASEMAPS).map(([id, { label }]) => {
+              const isDisabled = googleStatus === 'missing_key';
+              return (
+                <button
+                  key={id}
+                  onClick={() => {
+                    if (isDisabled) return;
+                    setBasemap(id);
+                  }}
+                  disabled={isDisabled}
+                  title={
+                    isDisabled
+                      ? 'Cần biến môi trường VITE_GOOGLE_MAPS_API_KEY để kích hoạt Google Maps'
+                      : label
+                  }
+                  className={`px-2.5 py-1 rounded whitespace-nowrap transition-all flex items-center space-x-1 ${
+                    isDisabled
+                      ? 'text-[#475569] cursor-not-allowed opacity-60'
+                      : basemap === id
+                      ? 'bg-[#00d4aa] text-[#060b18] font-bold'
+                      : 'text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  <span>{label}</span>
+                  {isDisabled && <span className="text-[9px] text-[#f5a623] ml-0.5">(Cần Key)</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -336,6 +426,20 @@ export default function WebGISMap({ selectedCoordinate }) {
           </select>
         </div>
       </div>
+
+      {/* Google Maps Status Banner */}
+      {googleStatus === 'loading' && (
+        <div className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-[#1e3a5f]/30 border border-[#1e3a5f] text-xs font-mono text-[#94a3b8]">
+          <div className="animate-spin w-3.5 h-3.5 border-2 border-[#00d4aa] border-t-transparent rounded-full" />
+          <span>Đang tải Google Maps API...</span>
+        </div>
+      )}
+      {googleStatus === 'error' && googleError && (
+        <div className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-[#ef4444]/10 border border-[#ef4444]/40 text-xs font-mono text-[#ef4444]">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>Google Maps: {googleError}</span>
+        </div>
+      )}
 
       {/* Main Map Box */}
       <div className="relative rounded-2xl overflow-hidden border border-[#1e3a5f]/80 shadow-2xl bg-[#0a0f1a]">
